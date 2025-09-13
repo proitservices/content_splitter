@@ -81,13 +81,13 @@ def split_text(strategy):
 
 def get_input():
     params = {
-        'chunk_size': request.json.get('chunk_size', 1024),
-        'chunk_overlap': request.json.get('chunk_overlap', 128)
+        'chunk_size': int(request.form.get('chunk_size', 1024)) if request.form.get('chunk_size') else 1024,
+        'chunk_overlap': int(request.form.get('chunk_overlap', 128)) if request.form.get('chunk_overlap') else 128
     }
-    if 'min_chunk_size' in request.json:
-        params['min_chunk_size'] = request.json['min_chunk_size']
+    if request.form.get('min_chunk_size'):
+        params['min_chunk_size'] = int(request.form.get('min_chunk_size'))
     
-    queue = request.json.get('queue') if request.is_json else None
+    queue = request.form.get('queue') or (request.json.get('queue') if request.is_json else None)
     if queue:
         connection = get_rabbit_connection()
         channel = connection.channel()
