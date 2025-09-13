@@ -1,0 +1,186 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Content Splitter API",
+        "version": "2.1",
+        "description": "API for splitting text into chunks using NLTK or LangChain"
+    },
+    "paths": {
+        "/": {
+            "get": {
+                "summary": "Service Info",
+                "description": "Displays author and version information.",
+                "responses": {
+                    "200": {
+                        "description": "HTML with ASCII art",
+                        "content": {
+                            "text/html": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/ver": {
+            "get": {
+                "summary": "Version Info",
+                "description": "Returns version, author, and system details.",
+                "responses": {
+                    "200": {
+                        "description": "Version information",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "version": {"type": "string"},
+                                        "author": {"type": "string"},
+                                        "compiled": {"type": "string"},
+                                        "served_by": {"type": "string"},
+                                        "container": {"type": "boolean"}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-code-samples": [
+                    {
+                        "lang": "curl",
+                        "source": "curl -X GET http://localhost:5001/ver"
+                    }
+                ]
+            }
+        },
+        "/health": {
+            "get": {
+                "summary": "Health Check",
+                "description": "Returns service health status.",
+                "responses": {
+                    "200": {
+                        "description": "Health status",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {"type": "string"}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-code-samples": [
+                    {
+                        "lang": "curl",
+                        "source": "curl -X GET http://localhost:5001/health"
+                    }
+                ]
+            }
+        },
+        "/split/{strategy}": {
+            "post": {
+                "summary": "Split Text into Chunks",
+                "description": "Splits text using NLTK or LangChain. Supports direct text, file upload, or RabbitMQ queue.",
+                "parameters": [
+                    {
+                        "name": "strategy",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": ["nltk", "langchain"]
+                        },
+                        "description": "Chunking strategy: 'nltk' for fast sentence-based, 'langchain' for recursive"
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "text": {"type": "string", "description": "Text to split"},
+                                    "queue": {"type": "string", "description": "Queue name to fetch text (e.g., 'splitter')"},
+                                    "chunk_size": {"type": "integer", "default": 1024},
+                                    "chunk_overlap": {"type": "integer", "default": 128},
+                                    "min_chunk_size": {"type": "integer", "description": "For NLTK only"}
+                                }
+                            },
+                            "example": {
+                                "text": "Para1 sentence1. Sentence2.\n\nPara2...",
+                                "chunk_size": 1024,
+                                "chunk_overlap": 128
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "file": {"type": "string", "format": "binary"}
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Chunks or queue status",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "status": {"type": "string", "description": "If queued"},
+                                        "num_chunks": {"type": "integer", "description": "If queued"},
+                                        "chunks": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {"type": "string"},
+                                                    "text": {"type": "string"}
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid input",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {"type": "string"}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "x-code-samples": [
+                    {
+                        "lang": "curl",
+                        "source": "curl -X POST http://localhost:5001/split/nltk -H 'Content-Type: application/json' -d '{\"text\": \"Para1 sentence1. Sentence2.\\n\\nPara2...\", \"chunk_size\": 1024, \"chunk_overlap\": 128}'"
+                    },
+                    {
+                        "lang": "curl",
+                        "source": "curl -X POST http://localhost:5001/split/langchain -H 'Content-Type: application/json' -d '{\"queue\": \"splitter\"}'"
+                    },
+                    {
+                        "lang": "curl",
+                        "source": "curl -X POST http://localhost:5001/split/nltk -F 'file=@document.txt'"
+                    }
+                ]
+            }
+        }
+    }
+}
