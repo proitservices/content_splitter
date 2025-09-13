@@ -1,16 +1,24 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import nltk
-from nltk.tokenize import sent_tokenize
+from nltk.tokenize import sent_tokenize, word_tokenize
 import uuid
 import pika
 import os
+import re
+
+def preprocess_text(input_text):
+    # Normalize newlines: keep 2-3 \n as paragraph breaks, remove excess
+    input_text = re.sub(r'\n{3,}', '\n\n', input_text)
+    return input_text.strip()
 
 def nltk_smart_chunk(input_text, chunk_size=1024, chunk_overlap=128, min_chunk_size=100):
+    input_text = preprocess_text(input_text)
     paragraphs = input_text.split('\n\n')
     chunk_data = []
     current_chunk = ""
     current_length = 0
     overlap_buffer = ""
+
     for para in paragraphs:
         sentences = sent_tokenize(para.strip())
         for sentence in sentences:
@@ -21,7 +29,13 @@ def nltk_smart_chunk(input_text, chunk_size=1024, chunk_overlap=128, min_chunk_s
                     chunk_id = str(uuid.uuid4())
                     full_chunk = overlap_buffer + current_chunk.strip()
                     chunk_data.append({"id": chunk_id, "text": full_chunk})
-                    overlap_buffer = full_chunk[-chunk_overlap:]
+                    # Ensure overlap ends at word boundary
+                    if chunk_overlap > 0:
+                        words = word_tokenize(full_chunk)
+                        overlap_text = " ".join(words[-int(chunk_overlap / 5):])  # Approx 5 chars/word
+                        overlap_buffer = overlap_text[:chunk_overlap] + " "
+                    else:
+                        overlap_buffer = ""
                     current_chunk = ""
                     current_length = 0
             current_chunk += sentence
@@ -36,10 +50,11 @@ def nltk_smart_chunk(input_text, chunk_size=1024, chunk_overlap=128, min_chunk_s
     return chunk_data
 
 def langchain_smart_chunk(input_text, chunk_size=1024, chunk_overlap=128):
+    input_text = preprocess_text(input_text)
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
-        separators=["\n\n", "\n", " ", ""],
+        separators=["\n\n", "\n", " ", ""],  # Prioritize paragraph breaks
         add_start_index=True
     )
     chunks = splitter.split_text(input_text)
@@ -47,11 +62,11 @@ def langchain_smart_chunk(input_text, chunk_size=1024, chunk_overlap=128):
 
 def get_rabbit_connection():
     credentials = pika.PlainCredentials(
-        os.getenv('RABBITMQ_USER', 'peter'),
-        os.getenv('RABBITMQ_PASS', 'teachme')
+        os.getenv('RABBITMQ_USER', 'username'),
+        os.getenv('RABBITMQ_PASS', 'pass')
     )
     return pika.BlockingConnection(pika.ConnectionParameters(
-        host=os.getenv('RABBITMQ_HOST', '192.168.0.220'),
+        host=os.getenv('RABBITMQ_HOST', '192.168.0.1'),
         port=int(os.getenv('RABBITMQ_PORT', 5672)),
         credentials=credentials
     ))

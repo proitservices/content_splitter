@@ -20,7 +20,7 @@ def log_event():
 def buy_me_a_coffee():
     ascii_art = '''
           "author":"Piotr Romanowski"
-          "version": "2.1"
+          "version": "2.3"
     '''
     return render_template('index.html', ascii_art=ascii_art)
 
@@ -29,9 +29,9 @@ def buy_me_a_coffee():
 def version():
     log_event()
     return jsonify({
-        "version": "2.1",
+        "version": "2.3",
         "author": "Piotr Romanowski",
-        "compiled": "11-06-2025 17:53",
+        "compiled": "13-09-2025 11:39",
         "served_by": os.uname()[2],
         "container": os.path.exists('/.dockerenv')
     })
@@ -69,7 +69,7 @@ def split_text(strategy):
             channel.basic_publish(
                 exchange='',
                 routing_key='splitter_chunks',
-                body=json.dumps(chunks),
+                body=json.dumps(chunks, ensure_ascii=False),
                 properties=pika.BasicProperties(delivery_mode=2)
             )
             connection.close()
@@ -81,12 +81,12 @@ def split_text(strategy):
 
 def get_input():
     params = {
-        'chunk_size': int(request.form.get('chunk_size', 1024)) if request.form.get('chunk_size') else 1024,
-        'chunk_overlap': int(request.form.get('chunk_overlap', 128)) if request.form.get('chunk_overlap') else 128
+        'chunk_size': int(request.form.get('chunk_size', request.json.get('chunk_size', 1024))) if request.form.get('chunk_size') or (request.is_json and request.json.get('chunk_size')) else 1024,
+        'chunk_overlap': int(request.form.get('chunk_overlap', request.json.get('chunk_overlap', 128))) if request.form.get('chunk_overlap') or (request.is_json and request.json.get('chunk_overlap')) else 128
     }
-    if request.form.get('min_chunk_size'):
-        params['min_chunk_size'] = int(request.form.get('min_chunk_size'))
-    
+    if request.form.get('min_chunk_size') or (request.is_json and request.json.get('min_chunk_size')):
+        params['min_chunk_size'] = int(request.form.get('min_chunk_size', request.json.get('min_chunk_size', 100)))
+
     queue = request.form.get('queue') or (request.json.get('queue') if request.is_json else None)
     if queue:
         connection = get_rabbit_connection()
@@ -105,7 +105,10 @@ def get_input():
             return {"error": "No file selected"}
         text = file.read().decode('utf-8')
     elif request.is_json:
-        text = request.json.get('text', '')
+        try:
+            text = request.json.get('text', '')
+        except json.JSONDecodeError:
+            return {"error": "Invalid JSON format"}
     else:
         return {"error": "Provide 'text' in JSON, 'queue', or upload 'file'"}
     
@@ -142,7 +145,7 @@ def start_queue_consumer():
                 ch.basic_publish(
                     exchange='',
                     routing_key='splitter_chunks',
-                    body=json.dumps(chunks),
+                    body=json.dumps(chunks, ensure_ascii=False),
                     properties=pika.BasicProperties(delivery_mode=2)
                 )
                 ch.basic_ack(delivery_tag=method.delivery_tag)
